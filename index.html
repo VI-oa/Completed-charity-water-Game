@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fff9e8">
+    <title>Water Dash | Charity: water</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <main class="page-shell">
+        <header class="site-header">
+            <a class="brand" href="#" aria-label="Charity: water home">
+                <img src="img/cw_logo_horizontal.png" alt="Charity: water">
+            </a>
+            <span class="header-label"><span class="status-dot"></span> A little game for a big mission</span>
+        </header>
+
+        <section class="intro" aria-labelledby="page-title">
+            <p class="eyebrow">CHARITY: WATER ARCADE</p>
+            <h1 id="page-title">Ready, set, <span>Water Dash!</span></h1>
+            <p class="intro-copy">Collect clean water and dodge the dirty drops. Every great water runner starts with
+                one step.</p>
+        </section>
+
+        <section class="game-card" aria-label="Water Dash game">
+            <div class="game-heading">
+                <div class="game-name">
+                    <span class="game-icon" aria-hidden="true">💧</span>
+                    <div>
+                        <h2>Water Dash</h2>
+                    </div>
+                </div>
+                <span class="game-status"><span class="status-dot"></span> READY TO PLAY</span>
+            </div>
+
+            <div class="game-hud" aria-label="Game stats">
+                <p>Score <strong id="score">0</strong><span class="hud-goal">/ 10</span></p>
+                <p>Time <strong id="timer">1:30</strong></p>
+                <p>Lives <strong id="lives" aria-label="3 lives">♥ ♥ ♥</strong></p>
+                <button id="reset-button" type="button">Reset</button>
+            </div>
+
+            <div class="game-container">
+                <canvas id="game-canvas" width="1280" height="720" tabindex="0" aria-label="Water Dash game area. Use the left and right arrow keys or A and D to move.">
+                    Your browser does not support this game.
+                </canvas>
+                <div class="confetti-layer" aria-hidden="true"></div>
+                <div class="start-overlay">
+                    <div class="start-panel">
+                        <span class="start-sparkle" aria-hidden="true">✦</span>
+                        <p class="start-kicker">YOUR ADVENTURE AWAITS</p>
+                        <h2>Ready to make a splash?</h2>
+                        <p>Collect 10 cans in 90 seconds. Dodge dirty drops and save your 3 lives!</p>
+                        <button id="start-button" type="button">Start Game <span aria-hidden="true">→</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="game-footer">
+                <p><span class="tip-icon" aria-hidden="true">✦</span> Catch cans, dodge dirty drops!</p>
+                <p class="keyboard-hint"><kbd>←</kbd> <kbd>→</kbd> <span>or</span> <kbd>A</kbd> <kbd>D</kbd> <span>to
+                        move</span></p>
+            </div>
+            <div class="touch-controls" aria-label="Touch controls">
+                <button class="move-button" type="button" data-direction="left" aria-label="Move left">←</button>
+                <span>Tap the game or use buttons to move</span>
+                <button class="move-button" type="button" data-direction="right" aria-label="Move right">→</button>
+            </div>
+            <p class="sr-only" id="game-announcement" aria-live="polite"></p>
+        </section>
+
+        <footer class="page-footer">
+            <span>Clean water changes everything.</span>
+            <span class="footer-sun" aria-hidden="true">☀</span>
+        </footer>
+    </main>
+    <script src="script.js"></script>
+</body>
+
+</html>
