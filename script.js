@@ -2,6 +2,9 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const startButton = document.getElementById('start-button');
 const resetButton = document.getElementById('reset-button');
+const difficultySelect = document.getElementById('difficulty-select');
+const difficultyDescription = document.getElementById('difficulty-description');
+const goalDisplay = document.getElementById('goal');
 const startOverlay = document.querySelector('.start-overlay');
 const gameStatus = document.querySelector('.game-status');
 const scoreDisplay = document.getElementById('score');
@@ -9,20 +12,47 @@ const timerDisplay = document.getElementById('timer');
 const livesDisplay = document.getElementById('lives');
 const gameAnnouncement = document.getElementById('game-announcement');
 const confettiLayer = document.querySelector('.confetti-layer');
+const fallingItemsLayer = document.querySelector('.falling-items');
+const hurtSound = document.getElementById('hurt-sound');
+const bucketSound = document.getElementById('bucket-sound');
 const keys = new Set();
-const gameSettings = {
-    duration: 90,
-    targetScore: 10,
-    startingLives: 3,
-    playerSpeed: 390
+const difficultyModes = {
+    easy: {
+        label: 'Easy',
+        duration: 120,
+        targetScore: 8,
+        startingLives: 3,
+        playerSpeed: 430,
+        spawnInterval: 0.95,
+        itemSpeed: 190,
+        description: 'A relaxed dash: collect 8 cans in 120 seconds.'
+    },
+    normal: {
+        label: 'Normal',
+        duration: 90,
+        targetScore: 10,
+        startingLives: 3,
+        playerSpeed: 390,
+        spawnInterval: 0.82,
+        itemSpeed: 235,
+        description: 'A balanced dash: collect 10 cans in 90 seconds.'
+    },
+    hard: {
+        label: 'Hard',
+        duration: 75,
+        targetScore: 15,
+        startingLives: 2,
+        playerSpeed: 350,
+        spawnInterval: 0.62,
+        itemSpeed: 300,
+        description: 'A speedy challenge: collect 15 cans in 75 seconds with 2 lives.'
+    }
 };
+let currentDifficulty = difficultyModes[difficultySelect.value];
 const floorImage = new Image();
 floorImage.src = 'assets/Water Dash Elements.png';
 const catImage = new Image();
 catImage.src = 'assets/cat image.png';
-const canImage = new Image();
-canImage.src = 'img/water-can-transparent.png';
-
 const player = {
     x: 65,
     y: 0,
@@ -34,14 +64,15 @@ const player = {
 const game = {
     active: false,
     score: 0,
-    lives: gameSettings.startingLives,
-    timeLeft: gameSettings.duration,
+    lives: currentDifficulty.startingLives,
+    timeLeft: currentDifficulty.duration,
     items: [],
     spawnElapsed: 0,
     lastFrame: null,
     animationFrame: null,
     currentFrame: 0,
     frameElapsed: 0,
+    hurtUntil: 0,
     confettiTimeout: null
 };
 
@@ -66,8 +97,39 @@ function showOverlay(kicker, title, message, buttonLabel) {
 function updateHud() {
     scoreDisplay.textContent = game.score;
     timerDisplay.textContent = formatTime(game.timeLeft);
-    livesDisplay.textContent = `${'♥ '.repeat(game.lives)}${'♡ '.repeat(gameSettings.startingLives - game.lives)}`.trim();
+    goalDisplay.textContent = currentDifficulty.targetScore;
+    livesDisplay.textContent = `${'♥ '.repeat(game.lives)}${'♡ '.repeat(currentDifficulty.startingLives - game.lives)}`.trim();
     livesDisplay.setAttribute('aria-label', `${game.lives} ${game.lives === 1 ? 'life' : 'lives'} remaining`);
+}
+
+function playSound(sound) {
+    sound.currentTime = 0;
+    const playback = sound.play();
+    if (playback) playback.catch((error) => {
+        console.error(`Unable to play sound "${sound.id}".`, error);
+    });
+}
+
+function getStartMessage() {
+    const lifeLabel = currentDifficulty.startingLives === 1 ? 'life' : 'lives';
+    return `Collect ${currentDifficulty.targetScore} cans in ${currentDifficulty.duration} seconds. Dodge dirty drops and save your ${currentDifficulty.startingLives} ${lifeLabel}!`;
+}
+
+function updateDifficulty() {
+    currentDifficulty = difficultyModes[difficultySelect.value];
+    difficultyDescription.textContent = currentDifficulty.description;
+    if (!game.active) {
+        game.score = 0;
+        game.lives = currentDifficulty.startingLives;
+        game.timeLeft = currentDifficulty.duration;
+        if (gameStatus.classList.contains('is-finished')) {
+            setStatus('READY TO PLAY', 'ready');
+        }
+    }
+    updateHud();
+    if (!game.active) {
+        showOverlay('YOUR ADVENTURE AWAITS', 'Ready to make a splash?', getStartMessage(), 'Start Game');
+    }
 }
 
 function formatTime(seconds) {
@@ -80,13 +142,15 @@ function formatTime(seconds) {
 function resetGame() {
     game.active = false;
     game.score = 0;
-    game.lives = gameSettings.startingLives;
-    game.timeLeft = gameSettings.duration;
+    game.lives = currentDifficulty.startingLives;
+    game.timeLeft = currentDifficulty.duration;
     game.items = [];
+    fallingItemsLayer.replaceChildren();
     game.spawnElapsed = 0;
     game.lastFrame = null;
     game.currentFrame = 0;
     game.frameElapsed = 0;
+    game.hurtUntil = 0;
     player.x = 65;
     keys.clear();
     if (game.animationFrame !== null) {
@@ -98,12 +162,13 @@ function resetGame() {
         game.confettiTimeout = null;
     }
     confettiLayer.replaceChildren();
+    difficultySelect.disabled = false;
     updateHud();
     setStatus('READY TO PLAY', 'ready');
     showOverlay(
         'YOUR ADVENTURE AWAITS',
         'Ready to make a splash?',
-        'Collect 10 cans in 90 seconds. Dodge dirty drops and save your 3 lives!',
+        getStartMessage(),
         'Start Game'
     );
     drawGame();
@@ -114,10 +179,11 @@ function startGame() {
     if (gameStatus.classList.contains('is-finished')) resetGame();
 
     game.active = true;
+    difficultySelect.disabled = true;
     game.lastFrame = null;
     startOverlay.classList.add('is-hidden');
     setStatus('GAME IN PROGRESS', 'playing');
-    gameAnnouncement.textContent = 'Game started. Collect 10 clean water cans and avoid dirty drops.';
+    gameAnnouncement.textContent = `Game started on ${currentDifficulty.label}. ${getStartMessage()}`;
     canvas.focus({ preventScroll: true });
     game.animationFrame = requestAnimationFrame(gameLoop);
 }
@@ -126,6 +192,9 @@ function finishGame(won, message) {
     game.active = false;
     keys.clear();
     game.animationFrame = null;
+    game.items.forEach((item) => item.element.remove());
+    game.items = [];
+    difficultySelect.disabled = false;
     setStatus(won ? 'YOU DID IT!' : 'GAME OVER', 'finished');
     gameAnnouncement.textContent = message;
     showOverlay(
@@ -157,24 +226,25 @@ function drawGame() {
     ctx.fillStyle = '#8bd1cb';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (floorImage.complete && floorImage.naturalWidth) {
+    if (game.active && floorImage.complete && floorImage.naturalWidth) {
         ctx.drawImage(floorImage, 0, 0, canvas.width, canvas.height);
         // The background image is full-screen, with its ground strip near the bottom.
         ground.y = canvas.height * 0.88;
     } else {
-        ground.y = canvas.height - 62;
-        ctx.fillStyle = '#ffc907';
-        ctx.fillRect(0, ground.y, canvas.width, canvas.height - ground.y);
+        ground.y = game.active ? canvas.height - 62 : canvas.height - 10;
+        if (game.active) {
+            ctx.fillStyle = '#ffc907';
+            ctx.fillRect(0, ground.y, canvas.width, canvas.height - ground.y);
+        }
     }
 
     player.y = ground.y - player.height + 14;
     drawPlayer();
-    game.items.forEach(drawItem);
 }
 
 function drawPlayer() {
     if (!catImage.complete || !catImage.naturalWidth) {
-        ctx.fillStyle = '#17324d';
+        ctx.fillStyle = performance.now() < game.hurtUntil ? '#f5402c' : '#17324d';
         ctx.fillRect(player.x, player.y, player.width, player.height);
         return;
     }
@@ -186,6 +256,9 @@ function drawPlayer() {
     ctx.save();
     ctx.translate(player.x + (player.facingLeft ? player.width : 0), player.y);
     if (player.facingLeft) ctx.scale(-1, 1);
+    if (performance.now() < game.hurtUntil) {
+        ctx.filter = 'sepia(1) saturate(8) hue-rotate(315deg)';
+    }
     ctx.drawImage(
         catImage,
         column * frameWidth,
@@ -200,42 +273,35 @@ function drawPlayer() {
     ctx.restore();
 }
 
-function drawItem(item) {
-    if (item.type === 'can') {
-        if (canImage.complete && canImage.naturalWidth) {
-            ctx.drawImage(canImage, item.x, item.y, item.width, item.height);
-        } else {
-            ctx.fillStyle = '#2e9df7';
-            ctx.fillRect(item.x, item.y, item.width, item.height);
-        }
-        return;
-    }
-
-    const centerX = item.x + item.width / 2;
-    ctx.fillStyle = '#f16061';
-    ctx.beginPath();
-    ctx.moveTo(centerX, item.y + item.height);
-    ctx.bezierCurveTo(item.x - 2, item.y + item.height * 0.65, item.x + 3, item.y + item.height * 0.25, centerX, item.y);
-    ctx.bezierCurveTo(item.x + item.width - 3, item.y + item.height * 0.25, item.x + item.width + 2, item.y + item.height * 0.65, centerX, item.y + item.height);
-    ctx.fill();
-    ctx.fillStyle = 'rgb(255 255 255 / 55%)';
-    ctx.beginPath();
-    ctx.ellipse(centerX - 8, item.y + 16, 5, 9, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-}
-
 function createItem() {
     const isCan = Math.random() < 0.68;
     const width = isCan ? 54 : 44;
     const height = isCan ? 68 : 54;
+    const element = document.createElement(isCan ? 'img' : 'span');
+    element.className = `falling-item ${isCan ? 'falling-can' : 'falling-drop'}`;
+    if (isCan) {
+        element.src = 'img/water-can-transparent.png';
+        element.alt = '';
+    }
+    element.setAttribute('aria-hidden', 'true');
+    fallingItemsLayer.append(element);
+
     game.items.push({
         type: isCan ? 'can' : 'drop',
         x: Math.random() * (canvas.width - width),
         y: -height,
         width,
         height,
-        speed: 235 + Math.min(gameSettings.duration - game.timeLeft, 50) * 2.2
+        speed: currentDifficulty.itemSpeed + Math.min(currentDifficulty.duration - game.timeLeft, 50) * 2.2,
+        element
     });
+}
+
+function positionItem(item) {
+    item.element.style.left = `${(item.x / canvas.width) * 100}%`;
+    item.element.style.top = `${(item.y / canvas.height) * 100}%`;
+    item.element.style.width = `${(item.width / canvas.width) * 100}%`;
+    item.element.style.height = `${(item.height / canvas.height) * 100}%`;
 }
 
 function itemsOverlap(item) {
@@ -249,17 +315,21 @@ function itemsOverlap(item) {
 function updateItems(deltaTime) {
     game.items.forEach((item) => {
         item.y += item.speed * deltaTime;
+        positionItem(item);
         if (!item.collected && itemsOverlap(item)) {
             item.collected = true;
             if (item.type === 'can') {
+                playSound(bucketSound);
                 game.score += 1;
                 scoreDisplay.textContent = game.score;
                 scoreDisplay.classList.remove('score-pop');
                 void scoreDisplay.offsetWidth;
                 scoreDisplay.classList.add('score-pop');
-                gameAnnouncement.textContent = `Water can collected. Score ${game.score} out of ${gameSettings.targetScore}.`;
+                gameAnnouncement.textContent = `Water can collected. Score ${game.score} out of ${currentDifficulty.targetScore}.`;
             } else {
+                playSound(hurtSound);
                 game.lives -= 1;
+                game.hurtUntil = performance.now() + 700;
                 updateHud();
                 livesDisplay.classList.remove('life-lost');
                 void livesDisplay.offsetWidth;
@@ -268,7 +338,11 @@ function updateItems(deltaTime) {
             }
         }
     });
-    game.items = game.items.filter((item) => !item.collected && item.y < canvas.height);
+    game.items = game.items.filter((item) => {
+        const shouldKeep = !item.collected && item.y < canvas.height;
+        if (!shouldKeep) item.element.remove();
+        return shouldKeep;
+    });
 }
 
 function gameLoop(timestamp) {
@@ -283,7 +357,7 @@ function gameLoop(timestamp) {
     let direction = 0;
     if (keys.has('a') || keys.has('arrowleft')) direction -= 1;
     if (keys.has('d') || keys.has('arrowright')) direction += 1;
-    player.x += direction * gameSettings.playerSpeed * deltaTime;
+    player.x += direction * currentDifficulty.playerSpeed * deltaTime;
     if (direction !== 0) player.facingLeft = direction < 0;
     player.x = Math.max(0, Math.min(player.x, canvas.width - player.width));
     if (direction !== 0) {
@@ -298,7 +372,7 @@ function gameLoop(timestamp) {
     }
 
     game.spawnElapsed += deltaTime;
-    if (game.spawnElapsed >= 0.82) {
+    if (game.spawnElapsed >= currentDifficulty.spawnInterval) {
         createItem();
         game.spawnElapsed = 0;
     }
@@ -306,7 +380,7 @@ function gameLoop(timestamp) {
     updateHud();
     drawGame();
 
-    if (game.score >= gameSettings.targetScore) {
+    if (game.score >= currentDifficulty.targetScore) {
         finishGame(true, `You collected ${game.score} clean water cans with ${formatTime(game.timeLeft)} left. Great job!`);
         return;
     }
@@ -315,7 +389,7 @@ function gameLoop(timestamp) {
         return;
     }
     if (game.timeLeft <= 0) {
-        finishGame(false, `Time is up! You collected ${game.score} of ${gameSettings.targetScore} cans. Try again!`);
+        finishGame(false, `Time is up! You collected ${game.score} of ${currentDifficulty.targetScore} cans. Try again!`);
         return;
     }
     game.animationFrame = requestAnimationFrame(gameLoop);
@@ -342,6 +416,7 @@ function movePlayerToPointer(event) {
 
 startButton.addEventListener('click', startGame);
 resetButton.addEventListener('click', resetGame);
+difficultySelect.addEventListener('change', updateDifficulty);
 window.addEventListener('keydown', handleKeyDown, true);
 window.addEventListener('keyup', handleKeyUp, true);
 canvas.addEventListener('pointerdown', movePlayerToPointer);
@@ -366,4 +441,5 @@ window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', drawGame);
 
 updateHud();
+updateDifficulty();
 drawGame();
